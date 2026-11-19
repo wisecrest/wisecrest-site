@@ -12,6 +12,8 @@
     btn: ["Ask Wisecrest", "Wisecrest से पूछें"],
     title: ["Ask Wisecrest", "Wisecrest से पूछें"],
     beta: ["Beta", "बीटा"],
+    shown: ["Here's what the calculator shows for your numbers. Open the full calculator to see every detail or change a number.", "आपके नंबरों पर कैलकुलेटर का नतीजा ऊपर है। पूरा हिसाब देखने या कोई नंबर बदलने के लिए पूरा कैलकुलेटर खोलें।"],
+    found: ["Here's what I found on Wisecrest:", "Wisecrest पर यह मिला:"],
     hello: ["Hi! Ask any money question in English, Hindi or Hinglish. I'll open the right Wisecrest calculator with your numbers filled in.", "नमस्ते! पैसे का कोई भी सवाल अंग्रेज़ी, हिंदी या हिंग्लिश में पूछें। मैं सही Wisecrest कैलकुलेटर आपके नंबरों के साथ खोल दूँगा।"],
     ph: ["Type your question…", "अपना सवाल लिखें…"],
     send: ["Send", "भेजें"],
@@ -60,8 +62,14 @@
     return q;
   }
   const numsIn = q => (q.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-  const HINGLISH = /\b(kya|kaise|kitna|kitni|kitne|hai|hain|ka|ki|ke|ko|me|mein|mai|pe|par|se|aur|ya|nahi|nahin|mera|meri|mere|mujhe|aap|saal|mahina|mahine|karu|karna|karein|milega|milegi|lagega|chahiye|batao|bataye|wala|wali|kab|kyun|agar|toh|bhi|abhi|kaun|konsa|kaunsa)\b/i;
-  const langOf = q => /[ऀ-ॿ]/.test(q) ? "hi" : HINGLISH.test(q) ? "hinglish" : "en";
+  const HINGLISH = /\b(kya|kaise|kitna|kitni|kitne|hai|hain|ka|ki|ke|ko|mein|mai|pe|aur|ya|nahi|nahin|mera|meri|mere|mujhe|aap|saal|mahina|mahine|karu|karna|karein|milega|milegi|milta|lagega|hoga|hogi|chahiye|batao|bataye|wala|wali|kab|kyun|agar|toh|bhi|abhi|kaun|konsa|kaunsa|kitne|paisa|paise|byaj|kar)\b/gi;
+  const langOf = q => /[ऀ-ॿ]/.test(q) ? "hi" : ((q.match(HINGLISH) || []).length >= 2 ? "hinglish" : "en");
+  // Every number the AI writes must come from the site's own data; otherwise its text is not shown.
+  function numbersOk(text, sources) {
+    const norm = t => normQ(String(t).replace(/[₹%]/g, " "));
+    const allowed = numsIn(norm(sources.join(" ")));
+    return numsIn(norm(text)).every(n => allowed.some(a => n < 1000 ? a === n : Math.abs(a - n) <= Math.max(1, a * 0.005)));
+  }
 
   /* ---------- context sent to the AI (all from this page's own data) ---------- */
   function facts() {
@@ -285,14 +293,18 @@
         const inputsTxt = t.in.filter(i => i.t !== "txt" && i.t !== "area").map(i => en(i.l) + ": " + fmtIn(i, vals[i.id]) + (i.id in used ? "" : " (default)")).join("; ");
         const ex = await post({ mode: "explain", q, ui: LANG, lang, tool: en(t.n), inputs: inputsTxt, result: resultText(r) });
         wait.remove();
-        const text = (!ex.fallback && ex.text) ? ex.text : (res.say || "");
+        const srcs = [q, inputsTxt, resultText(r), (r.rows || []).map(x => strip(T(x[0])) + " " + strip(x[1])).join(" "), strip(r.bw), strip(r.big)];
+        let text = (!ex.fallback && ex.text && numbersOk(ex.text, srcs)) ? ex.text : "";
+        if (!text) text = res.say && numbersOk(res.say, [q]) ? res.say : (lang === "hi" ? W.shown[1] : W.shown[0]);
         const missing = t.in.some(i => (i.t === "money" || i.t === "pct" || i.t === "num") && !(i.id in used));
         add("a", text + (missing ? "\n\n" + w("change") : ""));
         last = { id: t.id, vals: Object.fromEntries(t.in.filter(i => i.t !== "txt" && i.t !== "area").map(i => [i.id, vals[i.id]])) };
         hist.push({ r: "u", t: q }, { r: "a", t: `[opened ${t.id} calculator with ${Object.entries(used).map(([k, v]) => k + "=" + v).join(", ") || "default values"}] ${text}`.slice(0, 300) });
       } else {
         wait.remove();
-        const text = res.ask || res.say || w("nothing");
+        const gsrc = [q, facts()].concat((res.guides || []).map(id => GUIDES.find(g => g.id === id)).filter(Boolean).map(g => strip(T(g.b)) + " " + strip(g.b[0]) + " " + en(g.s) + " " + en(g.t)));
+        let text = res.ask || res.say || "";
+        if (!text || !numbersOk(text, gsrc)) text = res.offtopic ? w("nothing") : (lang === "hi" ? W.found[1] : W.found[0]);
         add("a", text);
         const gs = (res.guides || []).map(id => GUIDES.find(g => g.id === id)).filter(Boolean);
         if (gs.length) addNode(linkList(gs.map(g => ({ ic: g.ic, t: g.t, s: W.read, h: "#g-" + g.id }))));
