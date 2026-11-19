@@ -51,6 +51,18 @@
     return { q, changed: q !== before };
   }
 
+  /* ---------- turn Indian amounts into plain rupees in code (the AI is not trusted with lakh/crore) ---------- */
+  const UNIT = { lakh: 1e5, lakhs: 1e5, lac: 1e5, lacs: 1e5, l: 1e5, "लाख": 1e5, crore: 1e7, crores: 1e7, cr: 1e7, "करोड़": 1e7, "करोड": 1e7, k: 1e3, thousand: 1e3, hazar: 1e3, hazaar: 1e3, hajar: 1e3, "हज़ार": 1e3, "हजार": 1e3 };
+  function normQ(q) {
+    q = q.replace(/(\d),(?=\d)/g, "$1");
+    q = q.replace(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|crores?|cr|k|thousand|haza+r|hajar|l|लाख|करोड़|करोड|हज़ार|हजार)(?![a-zऀ-ॿ])/gi,
+      (m, n, u) => { const f = UNIT[u.toLowerCase()] || (/^haza+r$/i.test(u) ? 1e3 : 1); return String(Math.round(parseFloat(n) * f)); });
+    return q;
+  }
+  const numsIn = q => (q.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  const HINGLISH = /\b(kya|kaise|kitna|kitni|kitne|hai|hain|ka|ki|ke|ko|me|mein|mai|pe|par|se|aur|ya|nahi|nahin|mera|meri|mere|mujhe|aap|saal|mahina|mahine|karu|karna|karein|milega|milegi|lagega|chahiye|batao|bataye|wala|wali|kab|kyun|agar|toh|bhi|abhi|kaun|konsa|kaunsa)\b/i;
+  const langOf = q => /[ऀ-ॿ]/.test(q) ? "hi" : HINGLISH.test(q) ? "hinglish" : "en";
+
   /* ---------- context sent to the AI (all from this page's own data) ---------- */
   function facts() {
     const best = (ten, who) => BANKS.filter(b => (who === "s" ? b.sr : b.r)[ten] != null).sort((a, b) => (who === "s" ? b.sr : b.r)[ten] - (who === "s" ? a.sr : a.r)[ten])[0];
@@ -187,14 +199,14 @@
     if (hits.length) return linkList(hits);
     return linkList([{ ic: "🧮", t: W.all, s: ["Page", "पेज"], h: "#calculate" }]);
   }
-  function cleanVals(t, raw) {
+  function cleanVals(t, raw, allowed) {
     const vals = {}, used = {};
     t.in.forEach(i => { vals[i.id] = i.v; });
     Object.entries(raw || {}).forEach(([k, v]) => {
       const i = t.in.find(x => x.id === k); if (!i) return;
       if (i.t === "sel") { const ok = i.o.find(([ov]) => String(ov) === String(v)); if (ok) { vals[k] = ok[0]; used[k] = ok[0]; } }
       else if (i.t === "txt" || i.t === "area") { vals[k] = String(v).slice(0, 200); used[k] = vals[k]; }
-      else { const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[₹,\s]/g, "")); if (isFinite(n) && n >= 0 && n < 1e12) { vals[k] = n; used[k] = n; } }
+      else { const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[₹,\s]/g, "")); if (isFinite(n) && n >= 0 && n < 1e12 && allowed.some(a => Math.abs(a - n) < 1e-9)) { vals[k] = n; used[k] = n; } }
     });
     return { vals, used };
   }
@@ -232,17 +244,17 @@
     if (!panel.classList.contains("on")) open();
     const sendBtn = panel.querySelector(".wc-row button"); sendBtn.disabled = true;
     add("u", original);
-    const { q, changed } = scrub(original.slice(0, 500));
+    const sc = scrub(original.slice(0, 500)), changed = sc.changed, q = normQ(sc.q), lang = langOf(sc.q);
     if (changed) add("note", w("redacted"));
     const wait = add("a wait", w("thinking"));
 
     try {
-      const hits = doSearch(q);
+      const hits = doSearch(sc.q);
       const toolIds = [...new Set(hits.filter(h => h.h.startsWith("#t-")).map(h => h.h.slice(3).split("?")[0]))].filter(id => TOOL[id]).slice(0, 4);
       if (last && TOOL[last.id] && !toolIds.includes(last.id)) toolIds.unshift(last.id);
       const guideIds = hits.filter(h => h.h.startsWith("#g-")).map(h => h.h.slice(3)).slice(0, 3);
       const body = {
-        q, ui: LANG, facts: facts(), catalog: catalog(),
+        q, ui: LANG, lang, facts: facts(), catalog: catalog(),
         tools: toolIds.slice(0, 5).map(id => spec(TOOL[id], last && last.id === id ? last.vals : null)),
         guides: guideIds.map((id, n) => GUIDES.find(g => g.id === id)).filter(Boolean).map((g, n) => guideCtx(g, n === 0)),
         history: hist.slice(-4)
@@ -257,21 +269,21 @@
       }
 
       if (res.fallback || res.error) {
-        wait.remove(); add("a", w("fallback")); addNode(searchLinks(q));
+        wait.remove(); add("a", w("fallback")); addNode(searchLinks(sc.q));
         hist.push({ r: "u", t: q });
         return;
       }
 
       const t = res.tool && TOOL[res.tool];
       if (t) {
-        const { vals, used } = cleanVals(t, res.values);
+        const { vals, used } = cleanVals(t, res.values, numsIn(q).concat(last && last.id === t.id ? Object.values(last.vals).filter(v => typeof v === "number") : []));
         let r;
         try { r = t.run(vals); } catch (e) { r = null; }
         if (!r) { wait.remove(); add("a", res.say || ""); addNode(linkList([{ ic: t.ic, t: t.n, s: ["Calculator", "कैलकुलेटर"], h: "#t-" + t.id }])); return; }
         addNode(resultCard(t, vals, r));
         wait.textContent = w("calc"); addNode(wait);
         const inputsTxt = t.in.filter(i => i.t !== "txt" && i.t !== "area").map(i => en(i.l) + ": " + fmtIn(i, vals[i.id]) + (i.id in used ? "" : " (default)")).join("; ");
-        const ex = await post({ mode: "explain", q, ui: LANG, tool: en(t.n), inputs: inputsTxt, result: resultText(r) });
+        const ex = await post({ mode: "explain", q, ui: LANG, lang, tool: en(t.n), inputs: inputsTxt, result: resultText(r) });
         wait.remove();
         const text = (!ex.fallback && ex.text) ? ex.text : (res.say || "");
         const missing = t.in.some(i => (i.t === "money" || i.t === "pct" || i.t === "num") && !(i.id in used));
@@ -284,7 +296,7 @@
         add("a", text);
         const gs = (res.guides || []).map(id => GUIDES.find(g => g.id === id)).filter(Boolean);
         if (gs.length) addNode(linkList(gs.map(g => ({ ic: g.ic, t: g.t, s: W.read, h: "#g-" + g.id }))));
-        else if (!res.ask) addNode(searchLinks(q));
+        else if (!res.ask && !res.offtopic) addNode(searchLinks(sc.q));
         hist.push({ r: "u", t: q }, { r: "a", t: text.slice(0, 300) });
       }
     } finally {
