@@ -295,7 +295,7 @@
         wait.remove();
         const srcs = [q, inputsTxt, resultText(r), (r.rows || []).map(x => strip(T(x[0])) + " " + strip(x[1])).join(" "), strip(r.bw), strip(r.big)];
         let text = (!ex.fallback && ex.text && numbersOk(ex.text, srcs)) ? ex.text : "";
-        if (!text) text = res.say && numbersOk(res.say, [q]) ? res.say : (lang === "hi" ? W.shown[1] : W.shown[0]);
+        if (!text) text = lang === "hi" ? W.shown[1] : W.shown[0];
         const missing = t.in.some(i => (i.t === "money" || i.t === "pct" || i.t === "num") && !(i.id in used));
         add("a", text + (missing ? "\n\n" + w("change") : ""));
         last = { id: t.id, vals: Object.fromEntries(t.in.filter(i => i.t !== "txt" && i.t !== "area").map(i => [i.id, vals[i.id]])) };
