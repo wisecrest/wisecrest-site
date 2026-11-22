@@ -215,6 +215,8 @@ footer .fine{border-top:1px solid rgba(255,255,255,.12);margin-top:22px;padding-
   .res .rows div{background:#f3f3f3}
 }
 </style>
+<!-- Flight search results live on the Trips page -->
+<script>(function(){if(/[?&]flightSearch=/.test(location.search))location.replace("/trips/"+location.search+"#flights");})();</script>
 <!-- Travelpayouts Drive: loads only after the visitor accepts cookies -->
 <script data-cfasync="false">(function(){function tp(){if(window.__tpDrive)return;window.__tpDrive=1;var s=document.createElement("script");s.async=1;s.setAttribute("data-cmp-ab","2");s.src="https://emrld.ltd/NjA1MzA4.js?t=605308";document.head.appendChild(s);}try{if(localStorage.getItem("wc-consent")==="true")tp();}catch(e){}window.addEventListener("wc-consent",function(e){if(e.detail)tp();});})();</script>
 </head>
