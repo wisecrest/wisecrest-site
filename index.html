@@ -1216,7 +1216,7 @@ function renderShell() {
   $("#sampleBar").textContent = u("sample");
   const route = location.hash.slice(1).split("?")[0] || "home";
   const on = r => route === r || route.startsWith(r) ? "on" : "";
-  $("#menu").innerHTML = `<a href="#calculate" class="${on("calculate") || (route.startsWith("t-") ? "on" : "")}">${u("m_calc")}</a><a href="#rates" class="${on("rates")}">${u("m_rates")}</a><a href="#learn" class="${on("learn") || (route.startsWith("g-") ? "on" : "")}">${u("m_learn")}</a><a href="#help" class="${on("help")}">${u("m_help")}</a><a href="#news" class="${on("news")}">${u("m_news")}</a>`;
+  $("#menu").innerHTML = `<a href="#calculate" class="${on("calculate") || (route.startsWith("t-") ? "on" : "")}">${u("m_calc")}</a><a href="#rates" class="${on("rates")}">${u("m_rates")}</a><a href="#learn" class="${on("learn") || (route.startsWith("g-") ? "on" : "")}">${u("m_learn")}</a><a href="#help" class="${on("help")}">${u("m_help")}</a><a href="#news" class="${on("news")}">${u("m_news")}</a><a href="/trips/">✈️ ${T(["Trips", "यात्रा"])}</a>`;
   $("#alertBtn").textContent = u("alerts");
   $("#tabbar").innerHTML = [["home", "🏠", "home"], ["calculate", "🧮", "m_calc"], ["rates", "📈", "rates"], ["search", "🔍", "search"], ["more", "☰", "menu"]].map(([h, i, k]) => `<a href="#${h}" class="${route === h ? "on" : ""}" ${h === "search" ? 'data-search="1"' : ""}><i>${i}</i>${u(k)}</a>`).join("");
   $("#oq").placeholder = u("sph");
