@@ -704,6 +704,7 @@ function init(){
   $("#qgo").onclick=()=>{$("#sugg").classList.remove("show");applyQ($("#q").value.trim())};
   document.addEventListener("click",e=>{if(!e.target.closest(".search"))$("#sugg").classList.remove("show")});
   run(); initMap(); loadPhotos(); cookieBar();
+  if(/[?&]flightSearch=/.test(location.search)){const go=()=>{const f=document.getElementById("flights");if(f)scrollTo({top:f.getBoundingClientRect().top+scrollY-80,behavior:"smooth"})};setTimeout(go,800);setTimeout(go,3000);}
 }
 init();
 </script>
